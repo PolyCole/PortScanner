@@ -1,2 +1,2 @@
 # PortScanner
-A simple port scanner created using sockets in Java.
+A port scanner written in Java using sockets.
