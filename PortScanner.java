@@ -85,30 +85,14 @@ public class PortScanner {
 		// Iterating through results and outputting open ports.
 		for(Future<Port> a : futures)
 		{
-			try {
-				if(a.get().getStatus()) 
-				{
-					try 
-					{
-						a.get().printport();
-					} 
-					catch (InterruptedException e) 
-					{
-						e.printStackTrace();
-					} 
-					catch (ExecutionException e) 
-					{
-						e.printStackTrace();
-					}
-				}
-			} 
-			catch (InterruptedException e) 
+			try 
 			{
-				e.printStackTrace();
+				Port current = a.get();
+				if(current.getStatus()) current.printport();
 			} 
-			catch (ExecutionException e) 
+			catch (InterruptedException | ExecutionException e1) 
 			{
-				e.printStackTrace();
+				e1.printStackTrace();
 			}
 		}
 		
