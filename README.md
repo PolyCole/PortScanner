@@ -1,5 +1,5 @@
 # PortScanner
-A port scanner written in Java using sockets.
+A port scanner written in Java using sockets. Now supports command line interfacing.
 
 <head>
   <main>
