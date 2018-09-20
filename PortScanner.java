@@ -1,6 +1,12 @@
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.PrintWriter;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.Callable;
@@ -8,6 +14,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class PortScanner {
 
@@ -35,32 +43,52 @@ public class PortScanner {
 	 * Really, really pretty right?
 	 */
 	
+	private static int timeout = 200;
+	private static int threadcount = 40;
+	private static String target = "0.0.0.0";
+	private static int portCount = 65535;
+	private static Scanner inputFile = null;
+	private static PrintWriter outputFile = null;
+	
+	private static ArrayList<String> ipsToScan = new ArrayList<>();
+	
+	private static final HashSet<String> operators = initializeHashSet();
+	
 	public static void main(String[] args) 
 	{
-		// Gathering information about target.
-		Scanner keyboard = new Scanner(System.in);
-		System.out.print("Target IP: ");
-		String ip = keyboard.nextLine().trim();
+		boolean isValid = false;
 		
-		System.out.print("Number ports to be scanned (Max 65535): ");
-		int numPorts = keyboard.nextInt();
+		for(int i = 0; i < args.length; ++i)
+		{
+			if(operators.contains(args[i]))
+			{
+				isValid = true;
+				continue;
+			}
+			
+			if(isValid)
+			{
+				adjustScanParameters(args[i-1], args[i]);
+				isValid = false;
+			}
+			
+		}
 		
-		// 200 milliseconds reccomended.
-		System.out.print("Timeout (ms): ");
-		int timeout = keyboard.nextInt();
+		// Ensures the scan has an ip to work with.
+		if("0.0.0.0".equals(target) && inputFile == null) findTarget();
 		
-		// 40 thread-count reccomended.
-		System.out.print("Threadcount: ");
-		int threadCount = keyboard.nextInt();
-
-		keyboard.close();
+		// Avoids inadvertantely scanning 0.0.0.0
+		if(!("0.0.0.0".equals(target))) ipsToScan.add(target);
 		
-		// Running scan.
-		startScan(ip, numPorts, timeout, threadCount);
+		for(String ipAddress : ipsToScan)
+		{
+			// Running scan.
+			startScan(ipAddress, portCount, timeout, threadcount);
+		}
 		
 	}
 	
-	public static void startScan(String ip, int numPorts, int timeout, int threadCount)
+	private static void startScan(String ip, int numPorts, int timeout, int threadCount)
 	{
 		System.out.println("**********Starting scan on " + ip + "**********");
 		
@@ -82,6 +110,7 @@ public class PortScanner {
 		// Closing threadpool.
 		es.shutdown();
 
+		// TODO Look into whether there is a more efficient way of doing this.
 		// Iterating through results and outputting open ports.
 		for(Future<Port> a : futures)
 		{
@@ -112,15 +141,18 @@ public class PortScanner {
 			}
 		}
 		
+		if(outputFile != null) printToFile(futures, ip, numPorts, timeout, threadCount);
+		
 		long stopTime = System.currentTimeMillis();
 		
 		// Concluding.
 		System.out.println("Scanned " + numPorts + " ports on " + 
 							ip + " in " + totalTime(startTime, stopTime));
+		
 	}
 	
 	// Scanning a specific ip.
-	public static Future<Port> scanIP(ExecutorService es, String ip, int portNum, int timeout) 
+	private static Future<Port> scanIP(ExecutorService es, String ip, int portNum, int timeout) 
 	{
 		// Utilizing the pre-created threadpool.
 		return es.submit(new Callable<Port>() {
@@ -154,7 +186,7 @@ public class PortScanner {
 	}
 	
 	// Creates objects that represent the status of a port.
-	public static class Port
+	private static class Port
 	{
 		
 		private int portNum;
@@ -178,14 +210,48 @@ public class PortScanner {
 		
 		public boolean getStatus() {return status;}
 		
+		public int getPortNum() {return portNum;}
+		
 		public void setStatus(boolean s)
 		{
 			status = s;
 		}
 	}
 	
+	// Outputs the results of a scan to a file. Includes specifications about the scan itself.
+	private static void printToFile(List<Future<Port>> results, String ipAddress, int numPorts, int timeout, int threadcount) 
+	{
+		outputFile.println("Scan result for " + ipAddress);
+		outputFile.println("*******************************************************");
+		outputFile.println("Scan specifications: ");
+		outputFile.println("\tNumber of Ports: " + numPorts);
+		outputFile.println("\tTimeout (ms): " + timeout);
+		outputFile.println("\tThreadcount: " + threadcount);
+		outputFile.println("*******************************************************");
+		
+		// TODO finish implementing this method and ensure that it is efficient.
+		for(Future<Port> p : results)
+		{
+			try 
+			{
+				Port current = p.get();
+				
+				if(current.getStatus())
+				{
+					outputFile.println("Port " + current.getPortNum() + " is open.");
+				}
+ 			} 
+			catch (InterruptedException | ExecutionException e) 
+			{
+				e.printStackTrace();
+			}
+		}
+		
+		outputFile.close();
+	}
+	
 	// Calculates how much time was elapsed between the start and end of the scan.
-	public static String totalTime(long startTime, long stopTime)
+	private static String totalTime(long startTime, long stopTime)
 	{
 		long timeDiff = stopTime - startTime;
 		
@@ -200,7 +266,111 @@ public class PortScanner {
 		return minutes + ":" + seconds + "." + milliseconds;
 	}
 	
+	// Initializes the command hash set that helps parse in command parameters.
+	private static HashSet<String> initializeHashSet()
+	{
+		HashSet<String> toBeReturned = new HashSet<>();
+		toBeReturned.add("-i");
+		toBeReturned.add("-o");
+		toBeReturned.add("-to");
+		toBeReturned.add("-tc");
+		toBeReturned.add("-T");
+		toBeReturned.add("-p");
+		
+		return toBeReturned;
+	}
 	
+	//TODO Make this method stronger. Dealing with shit input.
+	private static void adjustScanParameters(String key, String adjustment)
+	{
+		if("-to".equals(key)) timeout = Integer.parseInt(adjustment);
+		else if("-tc".equals(key)) threadcount = Integer.parseInt(adjustment);
+		else if("-T".equals(key)) target = adjustment;
+		else if("-p".equals(key)) portCount = Integer.parseInt(adjustment);
+		else if("-i".equals(key)) initializeInputFile(adjustment);
+		else if("-o".equals(key)) initializeOutputFile(adjustment);
+	}
+	
+	// For use when the user forgets to specify an ip address.
+	private static void findTarget()
+	{
+		Scanner keyboard = new Scanner(System.in);
+		String ip;
+		
+		do
+		{
+			System.out.println("Please enter a valid IP: ");
+			ip = keyboard.nextLine().trim();
+			
+			if("q".equals(ip)) System.exit(1);
+		}
+		// Iterates till an ip is found.
+		while(!isValidIP(ip));
+		
+		target = ip;
+		keyboard.close();
+	}
+	
+	// Creates the input file so that the ips can be read in and scanned.
+	private static void initializeInputFile(String filename)
+	{
+		try
+		{
+			inputFile = new Scanner(new FileInputStream(filename));
+			verifyFileFormat();
+			inputFile.close();
+		}
+		catch(FileNotFoundException e)
+		{
+			System.err.println("Input file not found. Terminating");
+			System.exit(1);
+		}
+	}
+	
+	// Creates the output file so that the results of the scan can be written to file.
+	private static void initializeOutputFile(String filename)
+	{
+		try
+		{
+			outputFile = new PrintWriter(new FileOutputStream(filename));
+		}
+		catch(FileNotFoundException e)
+		{
+			// If the output file has not already been created.
+			@SuppressWarnings("unused")
+			File f = new File(filename);
+			initializeOutputFile(filename);
+		}
+	}
+	
+	// Checks that the input file has at least one valid ip address to scan. 
+	private static void verifyFileFormat()
+	{
+		boolean atleastOneValidIP = false;
+		
+		while(inputFile.hasNext())
+		{
+			String current = inputFile.next();
+			if(isValidIP(current))
+			{
+				atleastOneValidIP = true;
+				ipsToScan.add(current);
+			}
+		}
+		
+		if(!atleastOneValidIP)
+		{
+			throw new IllegalStateException("Input file has no valid IP addresses. Terminating");
+		}
+	}
+	
+	// Validates that the string passed in is a valid ip address.
+	private static boolean isValidIP(String input)
+	{
+		Pattern ipPattern = Pattern.compile("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}");
+		Matcher m = ipPattern.matcher(input);
+		return m.matches();
+	}
 }
 
 
