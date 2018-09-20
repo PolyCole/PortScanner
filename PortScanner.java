@@ -216,6 +216,7 @@ public class PortScanner {
 		}
 	}
 	
+	
 	// Outputs the results of a scan to a file. Includes specifications about the scan itself.
 	private static void printToFile(List<Future<Port>> results, String ipAddress, int numPorts, int timeout, int threadcount, int index) 
 	{
