@@ -30,9 +30,7 @@ public class PortScanner {
 	 *  TODO List
 	 *  ----------
 	 *  -Implement support for scanning a range of IPs.
-	 *  -File output
-	 *  -Find optimal threadcount and timeout.
-	 *  -Clean up output.
+	 *  -Improve sanitization of inputs with parameters.
 	 */
 	
 	
@@ -60,35 +58,36 @@ public class PortScanner {
 		
 		for(int i = 0; i < args.length; ++i)
 		{
+			// Checking if command argument is a parameter.
 			if(operators.contains(args[i]))
 			{
 				isValid = true;
 				continue;
 			}
 			
+			// Argument found valid, reading in change.
 			if(isValid)
 			{
 				adjustScanParameters(args[i-1], args[i]);
 				isValid = false;
 			}
-			
 		}
 		
 		// Ensures the scan has an ip to work with.
 		if("0.0.0.0".equals(target) && inputFile == null) findTarget();
 		
-		// Avoids inadvertantely scanning 0.0.0.0
+		// Avoids inadvertently scanning 0.0.0.0
 		if(!("0.0.0.0".equals(target))) ipsToScan.add(target);
 		
-		for(String ipAddress : ipsToScan)
+		for(int i = 0; i < ipsToScan.size(); ++i)
 		{
-			// Running scan.
-			startScan(ipAddress, portCount, timeout, threadcount);
+			// Running the scan
+			startScan(ipsToScan.get(i), portCount, timeout, threadcount, i);
 		}
 		
 	}
 	
-	private static void startScan(String ip, int numPorts, int timeout, int threadCount)
+	private static void startScan(String ip, int numPorts, int timeout, int threadCount, int index)
 	{
 		System.out.println("**********Starting scan on " + ip + "**********");
 		
@@ -110,7 +109,6 @@ public class PortScanner {
 		// Closing threadpool.
 		es.shutdown();
 
-		// TODO Look into whether there is a more efficient way of doing this.
 		// Iterating through results and outputting open ports.
 		for(Future<Port> a : futures)
 		{
@@ -141,7 +139,7 @@ public class PortScanner {
 			}
 		}
 		
-		if(outputFile != null) printToFile(futures, ip, numPorts, timeout, threadCount);
+		if(outputFile != null) printToFile(futures, ip, numPorts, timeout, threadCount, index);
 		
 		long stopTime = System.currentTimeMillis();
 		
@@ -219,17 +217,15 @@ public class PortScanner {
 	}
 	
 	// Outputs the results of a scan to a file. Includes specifications about the scan itself.
-	private static void printToFile(List<Future<Port>> results, String ipAddress, int numPorts, int timeout, int threadcount) 
+	private static void printToFile(List<Future<Port>> results, String ipAddress, int numPorts, int timeout, int threadcount, int index) 
 	{
 		outputFile.println("Scan result for " + ipAddress);
 		outputFile.println("*******************************************************");
 		outputFile.println("Scan specifications: ");
 		outputFile.println("\tNumber of Ports: " + numPorts);
 		outputFile.println("\tTimeout (ms): " + timeout);
-		outputFile.println("\tThreadcount: " + threadcount);
-		outputFile.println("*******************************************************");
+		outputFile.println("\tThreadcount: " + threadcount +"\n\n");
 		
-		// TODO finish implementing this method and ensure that it is efficient.
 		for(Future<Port> p : results)
 		{
 			try 
@@ -247,7 +243,11 @@ public class PortScanner {
 			}
 		}
 		
-		outputFile.close();
+		if(results.size() == 0) outputFile.println("No open ports found.");
+		
+		outputFile.println("*******************************************************");
+		
+		if(index == ipsToScan.size() -1) outputFile.close();
 	}
 	
 	// Calculates how much time was elapsed between the start and end of the scan.
