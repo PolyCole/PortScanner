@@ -41,10 +41,13 @@ public class PortScanner {
 	 * Really, really pretty right?
 	 */
 	
+	// Default scan parameters.
 	private static int timeout = 200;
-	private static int threadcount = 40;
-	private static String target = "0.0.0.0";
 	private static int portCount = 65535;
+	private static int threadcount = 40;
+	
+	private static String target = "0.0.0.0";
+	
 	private static Scanner inputFile = null;
 	private static PrintWriter outputFile = null;
 	
